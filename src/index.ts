@@ -3,7 +3,7 @@ import xs, {Stream, MemoryStream} from 'xstream';
 import dropRepeats from 'xstream/extra/dropRepeats';
 import { adapt } from '@cycle/run/lib/adapt';
 
-export type MainFn<So, Si> = (sources: So) => Si;
+export type MainFn<I, O> = (sources: I) => O;
 export type Reducer<T> = (state: T | undefined) => T | undefined;
 export type Selector = (sinks: any) => any;
 export type Aggregator = (...streams: Array<Stream<any>>) => Stream<any>;
@@ -39,11 +39,11 @@ export function mix<T = Stream<any>>(aggregator: Aggregator) {
 
 function makeGetter<T, R>(scope: Scope<T, R>): Getter<T, R> {
   if (typeof scope === 'string' || typeof scope === 'number') {
-    return function lensGet(state) {
+    return function lensGet(state: T | undefined): R | undefined {
       if (typeof state === 'undefined') {
         return void 0;
       } else {
-        return state[scope];
+        return ((state as any)[scope] as R);
       }
     };
   } else {
@@ -129,16 +129,16 @@ export class StateSource<T> {
   public isolateSink = isolateSink;
 }
 
-export default function onionify<So, Si>(
-                                main: MainFn<So, Si>,
-                                name: string = 'onion'): MainFn<Partial<So>, Partial<Si>> {
-  return function mainOnionified(sources: Partial<So>): Partial<Si> {
+export default function onionify<I, O>(
+                                main: MainFn<I, O>,
+                                name: string = 'onion'): MainFn<Partial<I>, Partial<O>> {
+  return function mainOnionified(sources: Partial<I>): Partial<O> {
     const reducerMimic$ = xs.create<Reducer<any>>();
     const state$ = reducerMimic$
       .fold((state, reducer) => reducer(state), void 0)
       .drop(1);
     sources[name] = new StateSource<any>(state$, name) as any;
-    const sinks = main(sources as So);
+    const sinks = main(sources as I);
     if (sinks[name]) {
       const stream$ = xs.fromObservable<Reducer<any>>(sinks[name]);
       reducerMimic$.imitate(stream$);
